@@ -38,6 +38,7 @@ func (q *QuadTree) InsertPoint(p image.Point) {
 			q.TRight.InsertPoint(p)
 			return
 		}
+		return
 	}
 	q.points = append(q.points, p)
 	if !q.acceptingPoints() && !q.hasChildren {
