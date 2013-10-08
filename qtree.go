@@ -1,12 +1,14 @@
 package quadtree
 
 import (
-	"bufio"
-
 	"code.google.com/p/draw2d/draw2d"
-	"image/png"
 
 	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
+
+	"bufio"
 	"log"
 	"os"
 )
@@ -51,6 +53,16 @@ func (q *QuadTree) acceptingPoints() bool {
 }
 
 func (q *QuadTree) LowerLeft() image.Rectangle {
+	min := image.Point{q.BoundingBox.Min.X, q.BoundingBox.Max.Y}
+	return image.Rect(
+		(q.BoundingBox.Min.X+min.X)/2,
+		(q.BoundingBox.Min.Y+min.Y)/2,
+		(q.BoundingBox.Max.X+min.X)/2,
+		(q.BoundingBox.Max.Y+min.Y)/2,
+	)
+}
+
+func (q *QuadTree) UpperLeft() image.Rectangle {
 	return image.Rect(
 		q.BoundingBox.Min.X,
 		q.BoundingBox.Min.Y,
@@ -59,36 +71,23 @@ func (q *QuadTree) LowerLeft() image.Rectangle {
 	)
 }
 
-func (q *QuadTree) UpperLeft() image.Rectangle {
-	p := image.Point{
-		q.BoundingBox.Min.X,
-		q.BoundingBox.Max.Y,
-	}
-
-	return image.Rect(
-		(p.X+q.BoundingBox.Min.X)/2,
-		(p.Y+q.BoundingBox.Min.Y)/2,
-		(p.X+q.BoundingBox.Max.X)/2,
-		(p.Y+q.BoundingBox.Max.Y)/2,
-	)
-}
-
 func (q *QuadTree) UpperRight() image.Rectangle {
+	max := image.Point{q.BoundingBox.Max.X, q.BoundingBox.Min.Y}
 	return image.Rect(
-		(q.BoundingBox.Min.X+q.BoundingBox.Max.X)/2,
-		(q.BoundingBox.Min.Y+q.BoundingBox.Max.Y)/2,
-		q.BoundingBox.Max.X,
-		q.BoundingBox.Max.Y,
+		(q.BoundingBox.Min.X+max.X)/2,
+		q.BoundingBox.Min.Y,
+		max.X,
+		(q.BoundingBox.Max.Y+max.Y)/2,
 	)
 }
 
 func (q *QuadTree) LowerRight() image.Rectangle {
-	Min := q.UpperLeft().Min
+	Min := q.UpperLeft().Max
 	return image.Rect(
 		Min.X,
 		Min.Y,
 		q.BoundingBox.Max.X,
-		q.BoundingBox.Max.Y/2,
+		q.BoundingBox.Max.Y,
 	)
 }
 
@@ -165,11 +164,12 @@ func saveToPngFile(filePath string, m image.Image) error {
 }
 
 func (q *QuadTree) drawOnContext(gc *draw2d.ImageGraphicContext) {
-	gc.MoveTo(float64(q.BoundingBox.Max.X), float64(q.BoundingBox.Max.Y))
-	gc.LineTo(float64(q.BoundingBox.Min.X), float64(q.BoundingBox.Max.Y))
-	gc.LineTo(float64(q.BoundingBox.Min.X), float64(q.BoundingBox.Min.Y))
-	gc.LineTo(float64(q.BoundingBox.Max.X), float64(q.BoundingBox.Min.Y))
+	max := image.Point{q.BoundingBox.Max.X, q.BoundingBox.Min.Y}
+	min := image.Point{q.BoundingBox.Min.X, q.BoundingBox.Max.Y}
+	gc.MoveTo(float64(q.BoundingBox.Min.X), float64(q.BoundingBox.Min.Y))
+	gc.LineTo(float64(max.X), float64(max.Y))
 	gc.LineTo(float64(q.BoundingBox.Max.X), float64(q.BoundingBox.Max.Y))
+	gc.LineTo(float64(min.X), float64(min.Y))
 	gc.Stroke()
 }
 
@@ -182,6 +182,7 @@ func drawDot(gc *draw2d.ImageGraphicContext, p image.Point) {
 func (q *QuadTree) Draw(fpath string) error {
 	Nodes := q.Walk()
 	img := image.NewRGBA(image.Rect(0, 0, q.BoundingBox.Max.X, q.BoundingBox.Max.Y))
+	draw.Draw(img, q.BoundingBox, &image.Uniform{color.White}, image.Point{0, 0}, draw.Over)
 	gc := draw2d.NewGraphicContext(img)
 	for _, node := range Nodes {
 		node.drawOnContext(gc)
