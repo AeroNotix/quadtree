@@ -2,21 +2,22 @@ package main
 
 import (
 	"fmt"
-	"github.com/AeroNotix/quadtree"
 	"image"
 	"math/rand"
-	"time"
+
+	"github.com/AeroNotix/quadtree"
 )
 
 func main() {
-	rand.Seed(time.Now().Unix())
+	n := 10000
+	canvasSize := 500
 	q := quadtree.QuadTree{
-		MaxPointsPerNode: 2,
-		BoundingBox:      image.Rect(0, 0, 500, 500),
+		MaxPointsPerNode: 12,
+		BoundingBox:      image.Rect(0, 0, canvasSize, canvasSize),
 	}
 
-	for x := 0; x < 100; x++ {
-		point := image.Point{rand.Intn(500), rand.Intn(500)}
+	for x := 0; x < n; x++ {
+		point := image.Point{rand.Intn(canvasSize), rand.Intn(canvasSize)}
 		q.InsertPoint(point)
 	}
 	fmt.Println(q.Draw("qtree.png"))

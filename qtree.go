@@ -1,12 +1,12 @@
 package quadtree
 
 import (
-	"code.google.com/p/draw2d/draw2d"
-
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
+
+	"github.com/llgcode/draw2d/draw2dimg"
 
 	"bufio"
 	"log"
@@ -19,11 +19,11 @@ type QuadTree struct {
 	BoundingBox      image.Rectangle
 	BLeft, TLeft     *QuadTree
 	BRight, TRight   *QuadTree
-	hasChildren      bool
+	rebalanced       bool
 }
 
 func (q *QuadTree) InsertPoint(p image.Point) {
-	if q.hasChildren {
+	if q.rebalanced {
 		if p.In(q.BLeft.BoundingBox) {
 			q.BLeft.InsertPoint(p)
 			return
@@ -31,19 +31,21 @@ func (q *QuadTree) InsertPoint(p image.Point) {
 		if p.In(q.BRight.BoundingBox) {
 			q.BRight.InsertPoint(p)
 			return
+
 		}
 		if p.In(q.TLeft.BoundingBox) {
 			q.TLeft.InsertPoint(p)
 			return
+
 		}
 		if p.In(q.TRight.BoundingBox) {
 			q.TRight.InsertPoint(p)
 			return
 		}
-		return
 	}
+	wasAcceptingPoints := q.acceptingPoints()
 	q.points = append(q.points, p)
-	if !q.acceptingPoints() && !q.hasChildren {
+	if !q.acceptingPoints() && wasAcceptingPoints {
 		q.rebalance()
 	}
 }
@@ -95,49 +97,50 @@ func (q *QuadTree) rebalance() {
 	if q.acceptingPoints() {
 		return
 	}
-	q.TLeft = &QuadTree{
-		MaxPointsPerNode: q.MaxPointsPerNode,
-		BoundingBox:      q.UpperLeft(),
-	}
-	q.BLeft = &QuadTree{
-		MaxPointsPerNode: q.MaxPointsPerNode,
-		BoundingBox:      q.LowerLeft(),
-	}
-	q.TRight = &QuadTree{
-		MaxPointsPerNode: q.MaxPointsPerNode,
-		BoundingBox:      q.UpperRight(),
-	}
-	q.BRight = &QuadTree{
-		MaxPointsPerNode: q.MaxPointsPerNode,
-		BoundingBox:      q.LowerRight(),
-	}
-	for _, p := range q.points {
-		if p.In(q.BLeft.BoundingBox) {
-			q.BLeft.InsertPoint(p)
-			continue
+	if !q.rebalanced {
+		q.TLeft = &QuadTree{
+			MaxPointsPerNode: q.MaxPointsPerNode,
+			BoundingBox:      q.UpperLeft(),
 		}
-		if p.In(q.BRight.BoundingBox) {
-			q.BRight.InsertPoint(p)
-			continue
+		q.BLeft = &QuadTree{
+			MaxPointsPerNode: q.MaxPointsPerNode,
+			BoundingBox:      q.LowerLeft(),
 		}
-		if p.In(q.TLeft.BoundingBox) {
-			q.TLeft.InsertPoint(p)
-			continue
+		q.TRight = &QuadTree{
+			MaxPointsPerNode: q.MaxPointsPerNode,
+			BoundingBox:      q.UpperRight(),
 		}
-		if p.In(q.TRight.BoundingBox) {
-			q.TRight.InsertPoint(p)
-			continue
-
+		q.BRight = &QuadTree{
+			MaxPointsPerNode: q.MaxPointsPerNode,
+			BoundingBox:      q.LowerRight(),
+		}
+		q.rebalanced = true
+		for _, p := range q.points {
+			if p.In(q.BLeft.BoundingBox) {
+				q.BLeft.points = append(q.BLeft.points, p)
+				continue
+			}
+			if p.In(q.BRight.BoundingBox) {
+				q.BRight.points = append(q.BRight.points, p)
+				continue
+			}
+			if p.In(q.TLeft.BoundingBox) {
+				q.TLeft.points = append(q.TLeft.points, p)
+				continue
+			}
+			if p.In(q.TRight.BoundingBox) {
+				q.TRight.points = append(q.TRight.points, p)
+				continue
+			}
 		}
 	}
-	q.hasChildren = true
 }
 
 func (q QuadTree) Walk() []QuadTree {
 	if q.acceptingPoints() {
 		return []QuadTree{q}
 	}
-	if q.hasChildren {
+	if q.rebalanced {
 		var nodes []QuadTree
 		nodes = append(nodes, q.BLeft.Walk()...)
 		nodes = append(nodes, q.TLeft.Walk()...)
@@ -163,7 +166,7 @@ func saveToPngFile(filePath string, m image.Image) error {
 	return b.Flush()
 }
 
-func (q *QuadTree) drawOnContext(gc *draw2d.ImageGraphicContext) {
+func (q *QuadTree) drawOnContext(gc *draw2dimg.GraphicContext) {
 	max := image.Point{q.BoundingBox.Max.X, q.BoundingBox.Min.Y}
 	min := image.Point{q.BoundingBox.Min.X, q.BoundingBox.Max.Y}
 	gc.MoveTo(float64(q.BoundingBox.Min.X), float64(q.BoundingBox.Min.Y))
@@ -173,9 +176,9 @@ func (q *QuadTree) drawOnContext(gc *draw2d.ImageGraphicContext) {
 	gc.Stroke()
 }
 
-func drawDot(gc *draw2d.ImageGraphicContext, p image.Point) {
+func drawDot(gc *draw2dimg.GraphicContext, p image.Point) {
 	gc.MoveTo(float64(p.X), float64(p.Y))
-	gc.LineTo(float64(p.X+3), float64(p.Y+3))
+	gc.LineTo(float64(p.X+1), float64(p.Y+1))
 	gc.Stroke()
 }
 
@@ -183,7 +186,7 @@ func (q *QuadTree) Draw(fpath string) error {
 	Nodes := q.Walk()
 	img := image.NewRGBA(image.Rect(0, 0, q.BoundingBox.Max.X, q.BoundingBox.Max.Y))
 	draw.Draw(img, q.BoundingBox, &image.Uniform{color.White}, image.Point{0, 0}, draw.Over)
-	gc := draw2d.NewGraphicContext(img)
+	gc := draw2dimg.NewGraphicContext(img)
 	for _, node := range Nodes {
 		node.drawOnContext(gc)
 		for _, point := range node.points {
